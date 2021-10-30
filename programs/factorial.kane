@@ -1,0 +1,7 @@
+let N : U           be μα.1 + α in
+let Z : (n:N) → N   be inl(T):N in
+let S : (n:N) → N   be (λn.inr n:N):N → N in
+let add : (n:N) → N be μf.λx.[ (λn.x):N → N | (λn.f n (S x)):N → N ] in
+let mul : (n:N) → N be μf.λx.[ (λn.Z:N):N → N | (λn.add (f n x) x):N → N ] in
+let fac : (n:N) → N be μf.[ (λn.1):N → N | (λn.mul (S n) f(n)):N → N ] in
+fac(6) // 120

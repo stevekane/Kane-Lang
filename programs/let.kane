@@ -1,0 +1,3 @@
+let i be (λx.<x,x>):(T → (T × T)) in
+let j be 1 in
+[π1 <[i j],j>]
