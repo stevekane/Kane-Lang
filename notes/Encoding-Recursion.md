@@ -55,9 +55,9 @@ addition as follows:
 This frightful shitshow uses several elements:
 
   split _ with (l,r) :: decompose a pair and bind two local variables
-       case _ of {e} :: dependent case split on finite set e
-                 [e] :: put some value in a box
-               ! [e] :: take a boxed value out the box
+    case _ of {e} :: dependent case split on finite set e
+      [e] :: put some value in a box
+    ! [e] :: take a boxed value out the box
 
 I don't really like this whole strategy very much and am going to ignore it now.
 

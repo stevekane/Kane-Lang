@@ -1,7 +1,3 @@
-TODO: Consider whether the built-in type constructors
-should be curried functions or terms that must be fully
-formed.
-
 This is what a partially applied pair would then look like.
 
   Pair a : (B → (A × B))

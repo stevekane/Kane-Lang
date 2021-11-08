@@ -6,309 +6,201 @@ module Stlc where
 import Control.Monad
 import Control.Monad.Fail
 import Data.Bool
+import Data.Int (Int)
 import Data.Maybe
 import Data.Either
 import Data.String
-import Data.List hiding (any)
+import Data.List hiding (any, lookup)
 import Data.Eq (Eq, (==), (/=))
-import GHC.Show (Show, show)
-import Parser 
+import Prelude ((-), (+), (>), (<), (>=), (<=))
 
 
-type Context = [(String,Type)]
-
--- TODO: include recursive types 
-data Type where
-  Bot   :: Type
-  Top   :: Type
-  (:+:) :: Type -> Type -> Type
-  (:×:) :: Type -> Type -> Type
-  (:→:) :: Type -> Type -> Type
-  Mu    :: String -> Type -> Type
-  TVar  :: String -> Type
-  deriving (Eq)
+type Variable = Int
+type Context = [Term]
 
 data Term where
-  Var   :: String -> Term
-  T     :: Term
-  Inl   :: Term -> Term
-  Inr   :: Term -> Term
-  (:|:) :: Term -> Term -> Term
-  (:*:) :: Term -> Term -> Term
-  Exl   :: Term -> Term
-  Exr   :: Term -> Term
-  Λ     :: String -> Term -> Term
-  Rec   :: String -> Term -> Term
-  (:@:) :: Term -> Term -> Term
-  (:::) :: Term -> Type -> Term
+  U      :: Term
+  Bot    :: Term
+  Top    :: Term
+  T      :: Term
+  (:×:)  :: Term -> Term -> Term
+  (:*:)  :: Term -> Term -> Term
+  Exl    :: Term -> Term
+  Exr    :: Term -> Term
+  (:+:)  :: Term -> Term -> Term
+  Inl    :: Term -> Term
+  Inr    :: Term -> Term
+  (:|:)  :: Term -> Term -> Term
+  Λ      :: Term -> Term
+  (:→:)  :: Term -> Term -> Term
+  (:@:)  :: Term -> Term -> Term
+  -- Rec    :: Term -> Term
+  Var    :: Variable -> Term
+  (:::)  :: Term -> Term -> Term
   deriving (Eq)
 
+eval :: Term -> Term
+eval (f :@: e) = case f of 
+  Λ u -> sub 0 e u
+  _   -> f :@: e
+eval e = e
 
+sub :: Int -> Term -> Term -> Term
+sub n e (u ::: τ) =
+  sub n e u ::: sub n e τ
+sub n e U =
+  U
+sub n e Bot =
+  Bot
+sub n e Top =
+  Top
+sub n e T =
+  T
+sub n e (τ :×: σ) =
+  sub n e τ :×: sub (n+1) e τ
+sub n e (l :*: r) =
+  sub n e l :*: sub n e r
+sub n e (Exl u) =
+  Exl (sub n e u)
+sub n e (Exr u) =
+  Exr (sub n e u)
+sub n e (τ :+: σ) =
+  sub n e τ :+: sub n e σ
+sub n e (Inl u) =
+  Inl (sub n e u)
+sub n e (Inr u) =
+  Inr (sub n e u)
+sub n e (f :|: g) =
+  sub n e f :|: sub n e g
+sub n e (Λ u) =
+  Λ (sub (n+1) e u)
+sub n e (τ :→: σ) =
+  sub n e τ :→: sub (n+1) e σ
+sub n e (f :@: u) =
+  sub n e f :@: sub n e u
+sub n e (Var n') 
+  | n == n'   = inc n 0 e  -- Sub in e while incrementing its bound variables
+  | n' > n    = Var (n'-1) -- This is a "free variable"
+  | otherwise = Var n'     -- A bound variable so leave it alone
 
+inc :: Int -> Int -> Term -> Term
+inc h n (u ::: τ) =
+  inc h n u ::: inc h n τ
+inc h n U =
+  U
+inc h n Bot =
+  Bot
+inc h n Top =
+  Top
+inc h n T =
+  T
+inc h n (τ :×: σ) =
+  inc h n τ :×: inc h (n+1) σ
+inc h n (l :*: r) =
+  inc h n l :*: inc h n r
+inc h n (Exl u) =
+  Exl (inc h n u)
+inc h n (Exr u) =
+  Exr (inc h n u)
+inc h n (τ :+: σ) =
+  inc h n τ :+: inc h n σ
+inc h n (Inl u) =
+  Inl (inc h n u)
+inc h n (Inr u) =
+  Inr (inc h n u)
+inc h n (f :|: g) =
+  inc h n f :|: inc h n g
+inc h n (Λ u) =
+  Λ (inc h (n+1) u)
+inc h n (τ :→: σ) =
+  inc h n τ :→: inc h (n+1) σ
+inc h n (f :@: u) =
+  inc h n f :@: inc h n u
+inc h n (Var n') 
+  | n' >= n   = Var (n'+h) -- free variable must be incremented to stay free
+  | otherwise = Var n'     -- A bound variable so leave it alone
 
+infer :: Context -> Term -> Maybe Term
+infer γ U = do
+  return U
 
+infer γ Bot = do
+  return U
 
-
-
-
-
--- BEGIN PRINTING
-binary :: 
-  (Show a, Show b) => 
-  String -> 
-  a -> 
-  String -> 
-  b -> 
-  String -> 
-  String
-binary ol l m r or = 
-  ol ++ show l ++ m ++ show r ++ or
-
-between :: 
-  Show s => 
-  String -> 
-  s -> 
-  String -> 
-  String
-between ol m or = 
-  ol ++ show m ++ or
-
-instance Show Type where
-  show Bot = 
-    "⊥"
-  show Top = 
-    "⊤"
-  show (τ :+: σ) = 
-    binary "(" τ " + " σ ")"
-  show (τ :×: σ) = 
-    binary "(" τ " × " σ ")"
-  show (τ :→: σ) = 
-    binary "(" τ " → " σ ")"
-  show (Mu x e) =
-    "(μ" ++ x ++ "." ++ show e ++ ")"
-  show (TVar x) =
-    x
-
-instance Show Term where
-  show (t ::: τ) = 
-    binary "" t ":" τ ""
-  show (Var s) = 
-    s
-  show T = 
-    "T"
-  show (Inl l) = 
-    between "inl(" l ")"
-  show (Inr r) = 
-    between "inr(" r ")"
-  show (l :|: r) = 
-    binary "[" l " | " r "]"
-  show (l :*: r) = 
-    binary "<" l "," r ">"
-  show (Exl l) = 
-    between "exl(" l ")"
-  show (Exr r) = 
-    between "exr(" r ")"
-  show (Λ x e) = 
-    "(λ" ++ x ++ "." ++ show e ++ ")"
-  show (Rec x e) =
-    "(μ" ++ x ++ "." ++ show e ++ ")"
-  show (f :@: e) = 
-    show f ++ between "(" e ")"
--- END PRINTING
-
-
-
-
-
-
-
-
-
-
--- BEGIN PARSING
--- pType, pTop, pBottom, pProduct, pArrow :: Parser Type
--- pTop = pchar 'T' >> pure Top
--- pBottom = pchar '⊥' >> pure Bottom
--- pProduct = do
---   pchar '('
---   l <- pType
---   pstring " × "
---   r <- pType
---   pchar ')'
---   return (Product l r)
--- pArrow = do
---   pchar '('
---   l <- pType
---   pstring " → "
---   r <- pType
---   pchar ')'
---   return (Arrow l r)
--- pType = 
---   pProduct <|> 
---   pArrow <|>
---   pBottom <|>
---   pTop
--- 
--- punit, ppair, pexl, pexr, pvariable, papplication, pfunction, plet :: Parser Term
--- pvariable = Inferable . Variable <$> some palpha
--- punit = pchar '1' >> pure (Inferable Unit)
--- pexl = pstring "π1" >> pure (Inferable Exr)
--- pexr = pstring "π2" >> pure (Inferable Exl)
--- ppair = do 
---   pchar '<' 
---   l <- pterm
---   pchar ','
---   r <- pterm
---   pchar '>'
---   return (Inferable (Pair l r))
--- papplication = do 
---   pchar '[' 
---   f <- pterm 
---   pspace 
---   e <- pterm 
---   pchar ']' 
---   return (Inferable (Application f e))
--- pfunction = do
---   pchar '(' >> pchar 'λ'
---   x <- some palpha
---   pchar '.'
---   e <- pterm
---   pchar ')' >> pchar ':'
---   τ <- pType
---   return (Annotated (Function x e τ))
--- plet = do
---   pstring "let "
---   x <- some palpha
---   pstring " be "
---   v <- pterm
---   pstring " in" 
---   pspace <|> pnewline
---   e <- pterm
---   return ((x ⇒ v) e)
--- pterm = 
---   punit <|>
---   pexr <|>
---   pexl <|>
---   ppair <|>
---   pfunction <|>
---   papplication <|>
---   plet <|>
---   pvariable
--- END PARSING
-
-
-
-
-
-
-
-
-
--- BEGIN TYPE-CHECKING
-infer :: Context -> Term -> Maybe Type
-infer γ (t ::: τ) = do
-  check γ t τ
-infer γ (Var s) = do
-  lookup s γ 
+infer γ Top = do
+  return U
 infer γ T = do
   return Top
+
+infer γ (τ :×: σ) = do
+  U <- infer γ τ
+  U <- infer (τ:γ) σ
+  return U
 infer γ (a :*: b) = do
-  σ <- infer γ a
-  τ <- infer γ b
-  return (σ :×: τ)
+  τ <- infer γ a
+  σ <- infer γ b
+  return (τ :×: σ)
+infer γ (Exl t) = do
+  τ :×: _ <- infer γ t
+  return τ
+infer γ (Exr t) = do
+  _ :×: σ <- infer γ t
+  return σ
+
+infer γ (τ :+: σ) = do
+  U <- infer γ τ
+  U <- infer γ σ
+  return U
+infer γ (Inl a ::: τ) = do
+  ρ :+: σ <- return τ
+  ρ'      <- infer γ a
+  True    <- return (ρ == ρ')
+  return (ρ :+: σ)
+infer γ (Inr b ::: τ) = do
+  ρ :+: σ <- return τ
+  σ'      <- infer γ b
+  True    <- return (σ == σ')
+  return (ρ :+: σ)
 infer γ (a :|: b) = do
   α :→: τ  <- infer γ a
   β :→: τ' <- infer γ b
   True     <- return (τ == τ')
   return ((α :+: β) :→: τ)
-infer γ (Exl t) = do
-  σ :×: _ <- infer γ t
-  return σ
-infer γ (Exr t) = do
-  _ :×: τ <- infer γ t
+
+infer γ (τ :→: σ) = do
+  U <- infer γ τ
+  U <- infer (τ:γ) σ
+  return U
+-- Allows (λx.λy.<x,y>):(T → (T → (T × T)))
+infer γ (Λ e@(Λ u) ::: τ@(σ :→: ρ)) = do
+  ρ'   <- infer (σ:γ) (e ::: ρ)
+  True <- return (ρ == ρ')
   return τ
-infer γ (f :@: e) = do
-  σ :→: τ <- infer γ f
-  σ'      <- infer γ e
+infer γ (Λ e ::: τ) = do
+  ρ :→: σ <- return τ
+  σ'      <- infer (ρ:γ) e
   True    <- return (σ == σ')
+  return (ρ :→: σ)
+infer γ (f :@: e) = do
+  ρ :→: σ <- infer γ f
+  ρ'      <- infer γ e
+  True    <- return (ρ == ρ')
+  return σ
+
+infer γ (Var s) = do
+  return (γ !! s)
+
+infer γ ((a :*: b) ::: (τ :×: σ)) = do
+  τ' <- infer γ a
+  ρ  <- infer γ b
+  ρ' <- infer (a:γ) σ
+  True <- return (ρ == ρ')
+  return (τ :×: ρ)
+
+infer γ (t ::: τ) = do
+  τ'   <- infer γ t 
+  True <- return (τ == τ')
   return τ
+
 infer _ _ = 
   fail "Failed to infer type"
-
-check :: Context -> Term -> Type -> Maybe Type
-check γ (Inl l) τ@(σ :+: _) = do 
-  σ'   <- infer γ l 
-  True <- return (σ == σ')
-  return τ
-check γ (Inr r) τ@(_ :+: ρ) = do 
-  ρ'   <- infer γ r
-  True <- return (ρ == ρ')
-  return τ
--- Allows (λx.λy.<x,y>):(T → (T → (T × T)))
-check γ (Λ x e@(Λ y u)) τ@(σ :→: ρ) = do
-  ρ'   <- check ((x,σ) : γ) e ρ
-  True <- return (ρ == ρ')
-  return τ
-check γ (Λ x e) τ@(σ :→: ρ) = do
-  ρ'   <- infer ((x,σ) : γ) e
-  True <- return (ρ == ρ')
-  return τ
-check _ _ _ = 
-  fail "Failed to check type" 
--- END TYPECHECKING
-
-
-
-
-
-
-
-
-
-
-(/) :: Term -> String -> Term -> Term
-(e/x) (Exl l) = 
-  Exl ((e/x) l)
-(e/x) (Exr r) = 
-  Exr ((e/x) r)
-(e/x) (a :*: b) = 
-  (e/x) a :*: (e/x) b
-(e/x) (l :|: r) = 
-  (e/x) l :|: (e/x) r
-(e/x) (Inl l) = 
-  Inl ((e/x) l)
-(e/x) (Inr r) = 
-  Inr ((e/x) r)
-(e/x) (Λ x' b) | x /= x' = 
-  Λ x' ((e/x) b)
-(e/x) (a :@: b) = 
-  (e/x) a :@: (e/x) b
-(e/x) (Var x') | x == x' = 
-  e
-(e/x) u = 
-  u
-
-evaluate :: Term -> Term
-evaluate (Exl e) = 
-  case evaluate e of 
-    l :*: _ -> l
-    _       -> Exl e
-evaluate (Exr e) = 
-  case evaluate e of 
-    _ :*: r -> r
-    _       -> Exr e
-evaluate (f :|: g :@: b) =
-  case evaluate b of 
-    Inl e ::: _ -> evaluate (f :@: e)
-    Inr e ::: _ -> evaluate (g :@: e)
-    Inl e       -> evaluate (f :@: e)
-    Inr e       -> evaluate (g :@: e)
-    _           -> f :|: g :@: b
-evaluate (f :@: e) = 
-  case evaluate f of
-    Λ x b ::: _ -> (e/x) b
-    Λ x b       -> (e/x) b
-    _           -> f :@: e
-evaluate t = 
-  t
--- END EVALUATION
