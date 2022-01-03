@@ -32,8 +32,8 @@ instance Show Term where
     between "inl(" l ")"
   show (Inr r) = 
     between "inr(" r ")"
-  show (l :|: r) = 
-    binary "[" l " | " r "]"
+  show (Case f g x) = 
+    binary "[" f " | " g "] " ++ show x
   show (τ :→: σ) = 
     binary "" τ " → " σ ""
   show (f :@: e) = 
