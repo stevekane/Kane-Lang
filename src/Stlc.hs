@@ -121,31 +121,43 @@ inc h n (Var n')
   | otherwise = Var n'
 
 eval :: Term -> Term
-eval U = U
-eval Bot = Bot
-eval Top = Top
-eval T = T
-eval (a :+: b) = a :+: b
-eval (Inl x) = Inl x
-eval (Inr x) = Inr x
+eval U = 
+  U
+eval Bot = 
+  Bot
+eval Top = 
+  Top
+eval T = 
+  T
+eval (a :+: b) = 
+  a :+: b
+eval (Inl x) = 
+  Inl x
+eval (Inr x) = 
+  Inr x
 eval (Case f g x) = case eval x of
   Inl a -> eval (f :@: a)
   Inr a -> eval (g :@: a)
   _     -> Case f g x
-eval (a :×: b) = a :×: b
-eval (a :*: b) = a :*: b
+eval (a :×: b) = 
+  a :×: b
+eval (a :*: b) = 
+  a :*: b
 eval (Exl x) = case eval x of
   a :*: b -> eval a
   _       -> Exl x
 eval (Exr x) = case eval x of
   a :*: b -> eval b
   _       -> Exr x
-eval (a :→: b) = a :→: b
-eval (Λ e) = Λ e
+eval (a :→: b) = 
+  a :→: b
+eval (Λ e) = 
+  Λ e
 eval (f :@: e) = case eval f of 
   Λ u -> eval (sub 0 e u)
   _   -> f :@: e
-eval (Var n) = Var n
+eval (Var n) = 
+  Var n
 eval (e ::: τ) = case (eval e,eval τ) of
   (a :*: b, σ :×: ρ) -> (a :*: b) ::: (σ :×: sub 0 a ρ)
   (e',τ')            -> e' ::: τ'
