@@ -12,7 +12,8 @@ import Data.Either
 import Data.String
 import Data.List hiding (any, lookup)
 import Data.Eq (Eq, (==), (/=))
-import Prelude ((-), (+), (>), (<), (>=), (<=))
+import Data.Ord ((<),(>),(>=),(<=))
+import GHC.Num ((-),(+))
 
 
 type Variable = Int
@@ -23,14 +24,14 @@ data Term where
   Bot    :: Term
   Top    :: Term
   T      :: Term
-  (:×:)  :: Term -> Term -> Term
-  (:*:)  :: Term -> Term -> Term
-  Exl    :: Term -> Term
-  Exr    :: Term -> Term
   (:+:)  :: Term -> Term -> Term
   Inl    :: Term -> Term
   Inr    :: Term -> Term
   Case   :: Term -> Term -> Term -> Term
+  (:×:)  :: Term -> Term -> Term
+  (:*:)  :: Term -> Term -> Term
+  Exl    :: Term -> Term
+  Exr    :: Term -> Term
   Λ      :: Term -> Term
   (:→:)  :: Term -> Term -> Term
   (:@:)  :: Term -> Term -> Term
@@ -73,9 +74,12 @@ sub n e (τ :→: σ) =
 sub n e (f :@: u) =
   sub n e f :@: sub n e u
 sub n e (Var n') 
-  | n == n'   = inc n 0 e  -- Sub in e while incrementing its bound variables
-  | n' > n    = Var (n'-1) -- This is a "free variable"
-  | otherwise = Var n'     -- A bound variable so leave it alone
+  -- Sub in e while incrementing its bound variables
+  | n == n'   = inc n 0 e
+  -- This is a "free variable"
+  | n' > n    = Var (n'-1)
+  -- A bound variable so leave it alone
+  | otherwise = Var n'
 
 inc :: Int -> Int -> Term -> Term
 inc h n (u ::: τ) =
@@ -111,24 +115,40 @@ inc h n (τ :→: σ) =
 inc h n (f :@: u) =
   inc h n f :@: inc h n u
 inc h n (Var n') 
-  | n' >= n   = Var (n'+h) -- free variable must be incremented to stay free
-  | otherwise = Var n'     -- A bound variable so leave it alone
+  -- free variable must be incremented to stay free
+  | n' >= n   = Var (n'+h)
+  -- A bound variable so leave it alone
+  | otherwise = Var n'
 
 eval :: Term -> Term
+eval U = U
+eval Bot = Bot
+eval Top = Top
+eval T = T
+eval (a :+: b) = a :+: b
+eval (Inl x) = Inl x
+eval (Inr x) = Inr x
 eval (Case f g x) = case eval x of
   Inl a -> eval (f :@: a)
   Inr a -> eval (g :@: a)
-  x'    -> Case (eval f) (eval g) x'
+  _     -> Case f g x
+eval (a :×: b) = a :×: b
+eval (a :*: b) = a :*: b
 eval (Exl x) = case eval x of
   a :*: b -> eval a
-  x'      -> Exl x'
+  _       -> Exl x
 eval (Exr x) = case eval x of
   a :*: b -> eval b
-  x'      -> Exr x'
-eval (f :@: e) = case f of 
-  Λ u -> sub 0 e u
-  _   -> eval (f :@: e)
-eval e = e
+  _       -> Exr x
+eval (a :→: b) = a :→: b
+eval (Λ e) = Λ e
+eval (f :@: e) = case eval f of 
+  Λ u -> eval (sub 0 e u)
+  _   -> f :@: e
+eval (Var n) = Var n
+eval (e ::: τ) = case (eval e,eval τ) of
+  (a :*: b, σ :×: ρ) -> (a :*: b) ::: (σ :×: sub 0 a ρ)
+  (e',τ')            -> e' ::: τ'
 
 infer :: Context -> Term -> Maybe Term
 infer γ U = do
@@ -192,17 +212,17 @@ infer γ (f :@: e) = do
   ρ'      <- infer γ e
   True    <- return (ρ == ρ')
   return σ
-infer γ (Var s) = do
-  return (γ !! s)
 infer γ ((a :*: b) ::: (τ :×: σ)) = do
   τ' <- infer γ a
   ρ  <- infer γ b
-  ρ' <- infer (a:γ) σ
+  let ρ' = sub 0 a σ 
   True <- return (ρ == ρ')
   return (τ :×: ρ)
 infer γ (t ::: τ) = do
   τ'   <- infer γ t 
   True <- return (τ == τ')
   return τ
+infer γ (Var s) = do
+  return (γ !! s)
 infer _ _ = 
   fail "Failed to infer type"

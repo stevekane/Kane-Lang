@@ -2,15 +2,24 @@
 
 ## Universe
 
+    "Universe evaluates to itself"
+    Γ |- U ↓ U
+
     "Universe is a Universe"
     Γ |- U:U
 
 ## Bottom
 
+    "Bottom evaluates to itself"
+    Γ |- ⊥ ↓ ⊥
+
     "Bottom is a Universe"
     Γ |- ⊥:U
 
 ## Top
+
+    "Top evaluates to itself"
+    Γ |- ⊤ ↓ ⊤
 
     "Top is a Universe"
     Γ |- ⊤:U
@@ -19,6 +28,12 @@
     Γ |- 1:⊤
 
 ## Coproduct
+
+    "Computation by first case"
+    (f | g) (i1 a) ↓ f a
+
+    "Computation by second case"
+    (f | g) (i2 b) ↓ g b
 
     "Coproduct is a Universe"
     Γ |- a:U    
@@ -41,13 +56,13 @@
     Γ |- e:(σ + ρ)
     Γ |- (f | g) e:τ
 
-    "Computation by first case"
-    (f | g) (i1 a) ↓ f a
-
-    "Computation by second case"
-    (f | g) (i2 b) ↓ g b
-
 ## Product
+
+    "Computation by left projection"
+    Γ |- (π1 (a * b)) ↓ a
+    
+    "Computation by right projection"
+    Γ |- (π2 (a * b)) ↓ b
 
     "Product is a Universe"
     Γ   |- τ:U    
@@ -67,13 +82,12 @@
     Γ |- e:(τ × σ)
     Γ |- (π2 e):σ
 
-    "Computation by left projection"
-    Γ |- (π1 (a * b)) ↓ a
-    
-    "Computation by right projection"
-    Γ |- (π2 (a * b)) ↓ b
-
 ## Function
+
+    "Computation via application"
+    Γ |- f ↓ λu
+    Γ |- e ↓ e'
+    Γ |- (f e) ↓ u[e'/0]
 
     "Functions are universes"
     Γ    |- ρ ↓ ρ'
@@ -91,11 +105,6 @@
     Γ    |- e:ρ
     Γ    |- σ[e/0] ↓ τ
     Γ    |- (f e):τ
-
-    "Function computation via application"
-    Γ |- f ↓ λu
-    Γ |- e ↓ e'
-    Γ |- (f e) ↓ u[e'/0]
 
 ## Recursion
 
@@ -118,3 +127,11 @@
     "Annotated terms are judgements"
     Γ |- e:τ
     Γ |- (e:τ):τ
+
+    "Annotated pairs compute new types via
+    substitution"
+
+    Γ |- e ↓ (a*b)
+    Γ |- τ ↓ (σ×ρ)
+    ---------------------------
+    Γ |- (e:τ) ↓ (a*b:σ×ρ[a/0])

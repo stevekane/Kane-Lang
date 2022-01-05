@@ -15,13 +15,13 @@ instance Show Term where
   show Bot = 
     "Bot"
   show Top = 
-    "⊤op"
+    "Top"
   show T = 
     "T"
   show (τ :×: σ) = 
-    binary "(" τ " × " σ ")"
+    binary "(" τ " x " σ ")"
   show (l :*: r) = 
-    binary "<" l "," r ">"
+    binary "(" l " * " r ")"
   show (Exl l) = 
     between "exl(" l ")"
   show (Exr r) = 
@@ -35,13 +35,13 @@ instance Show Term where
   show (Case f g x) = 
     binary "[" f " | " g "] " ++ show x
   show (τ :→: σ) = 
-    binary "" τ " → " σ ""
+    binary "" τ " -> " σ ""
   show (f :@: e) = 
     binary "(" f " " e ")"
   -- show (Rec e) =
   --  "μ" ++ show e
   show (Λ e) = 
-    "λ" ++ show e
+    "fn." ++ show e
   show (Var s) = 
     show s
   show (t ::: τ) = 
