@@ -40,6 +40,11 @@ data Term where
   (:::)  :: Term -> Term -> Term
   deriving (Eq)
 
+-- TODO: define other fixities to be similar in precedent to Haskell itself
+-- functions bind to the right allowing us to write a :→: b :→: c to mean a → (b → c)
+infixl 9 :@:
+infixr 7 :→:
+
 sub :: Int -> Term -> Term -> Term
 sub n e (u ::: τ) =
   sub n e u ::: sub n e τ
@@ -154,8 +159,9 @@ eval (a :→: b) =
 eval (Λ e) = 
   Λ e
 eval (f :@: e) = case eval f of 
-  Λ u -> eval (sub 0 e u)
-  _   -> f :@: e
+  Λ u     -> eval (sub 0 e u)
+  u ::: τ -> eval (u :@: e)
+  _       -> f :@: e
 eval (Var n) = 
   Var n
 eval (e ::: τ) = case (eval e,eval τ) of

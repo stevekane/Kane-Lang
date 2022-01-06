@@ -9,25 +9,6 @@ test msg actual expected =
 
 main :: IO ()
 main = do
-  -- Important to use typechecking with annotations as well!
-  test "U:U" (infer [] U) (Just U)
-  test "Bot:U" (infer [] Bot) (Just U)
-  test "Top:U" (infer [] Top) (Just U)
-  test "T:Top" (infer [] T) (Just Top)
-  test "(UxTop):U" (infer [] (U :×: Top)) (Just U)
-  -- the left element of a product is a binder whose value is available to the right
-  test "(UxVar_0):U" (infer [] (U :×: Var 0)) (Just U)
-  -- this is not valid because the rightside would have type "Top" but must have type U
-  test "(TopxVar_0) does not typecheck" (infer [] (Top :×: Var 0)) Nothing
-  test "(T*Top):(TopxU)" (infer [] (T :*: Top)) (Just (Top :×: U))
-  test "Exl (T*Bot)" (infer [] (Exl (T :*: Bot))) (Just Top)
-  test "Exr (Bot*T)" (infer [] (Exr (Bot :*: T))) (Just Top)
-  -- all the following should type-check as valid possible types for Top * T
-  test "(Top*T):(TxTop)" (infer [] (Top :*: T)) (Just (U :×: Top))
-  test "(Top*T):::(UxVar_0)" (infer [] ((Top :*: T) ::: (U :×: Var 0))) (Just (U :×: Top))
-  test "(Top*T):::(UxTop)" (infer [] ((Top :*: T) ::: (U :×: Top))) (Just (U :×: Top))
-
-
   -- Evaluation tests
   test "eval U = U" (eval U) U
   test "eval Bot = Bot" (eval Bot) Bot
@@ -49,6 +30,7 @@ main = do
   test "eval (a -> b) = a -> b" (eval (Top :→: Bot)) (Top :→: Bot)
   test "eval fn.u = fn.u" (eval (Λ T)) (Λ T)
   test "eval (fn.u e) = eval u[e/0]" (eval (Λ (Var 0 :*: Var 0) :@: T)) (T :*: T)
+  test "function application of annotated functions is correct" (eval ((Λ (Var 0) ::: (Top :→: Top)) :@: T)) T
   test "evaluation continues after application" (eval (Λ (Exl (Var 0 :*: Var 0)) :@: T)) T
   test "eval (Var_0) = Var_0" (eval (Var 0)) (Var 0)
 
@@ -70,10 +52,22 @@ main = do
   let g = Λ T ::: (Top :→: Top)
   let h = Λ (Var 0 :*: Var 0) ::: (Top :→: (Top :×: Top))
   let j = Λ (Var 0) ::: (U :→: U)
+  let fg = Λ (Λ (Var 0 :*: Var 1)) ::: (Top :→: Top :→: (Top :×: Top))
+  -- TODO: I just don't think this is the correct signature!!
+  -- λλ0:U → 0 → 0 I think this says "U → the type U provided to a term of the type U provided"
+  -- I think it SHOULD be the following:
+  -- λλ0:U → 0 → 1 which says "U → the type U provided to the type U provided"
+  -- id : Π(τ:U) Π(t:τ) → τ
+  -- id τ x = x
+  -- (λτ.λx.x):((τ:U) → τ → τ)
+  -- this is the polymorphic identity function.
+  -- given a type τ this function will accept a term of τ and return that term
+  let depid = Λ (Λ (Var 0)) ::: (U :→: Var 0 :→: Var 0)
   let x = Inl T ::: (Top :+: Top)
   let fbad = Λ T ::: (U :→: Top)
   let gbad = Λ T ::: (U :→: Top)
   let xbad = T
+
   test "case f g x has type c when f:a->c and g:b-> and x:a+b" (infer [] (Case f g x)) (Just Top)
   test "case f g x has no type when x is not a coproduct" (infer [] (Case f g xbad)) Nothing
   test "case f g x has no type when f is not of type a->c" (infer [] (Case fbad g xbad)) Nothing
@@ -83,5 +77,13 @@ main = do
   test "(a x b):U when a and b(a) are types" (infer [] (U :×: Var 0)) (Just U)
   test "(a x b):U when a and eval b(a) are types" (infer [] (U :×: (j :@: Top))) (Just U)
   test "(a x b) has no type when b(a) is not a type" (infer [] (Top :×: Var 0)) Nothing
+  test "(a * b):(type a) x (type b)" (infer [] (T :*: T)) (Just (Top :×: Top))
+  test "exl (a * b):type a" (infer [] (Exl (T :*: Top))) (Just Top)
+  test "exr (a * b):type b" (infer [] (Exr (Top :*: T))) (Just Top)
 
+  test "(a -> b):U when a and b are types" (infer [] (Top :→: Bot)) (Just U)
+  test "(fn.fn.u):(a -> b -> c) as convenient sugar" (infer [] fg) (Just (Top :→: (Top :→: (Top :×: Top))))
+  test "(fn.u):(a -> b) has type a -> b when u has type b in a context where 0 -> a" (infer [] h) (Just (Top :→: (Top :×: Top)))
+  test "simple dependent function" (infer [] j) (Just (U :→: U))
+  test "dependent identity function" (infer [] depid) (Just (U :→: Var 0 :→: Var 0))
   test "(fn.u e):(u[0/e])" (infer [] (h :@: T)) (Just (Top :×: Top))
