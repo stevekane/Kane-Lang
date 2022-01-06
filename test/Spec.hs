@@ -1,19 +1,11 @@
 import Stlc
 import PrettyPrinting
 
-{-
-Test the following key properties of the language:
-
-Capture-avoiding Substitution
-Type-checking
-Evaluation
--}
-
 test :: (Show a, Eq a) => String -> a -> a -> IO ()
 test msg actual expected = 
   if expected == actual
-    then print ("Passed: " ++ msg)
-    else print ("Failed: " ++ msg ++ ". Expected " ++ show expected ++ ". Found " ++ show actual)
+    then print ("PASSED  " ++ msg)
+    else print ("FAILED  " ++ msg ++ ". Expected " ++ show expected ++ ". Found " ++ show actual)
 
 main :: IO ()
 main = do
@@ -34,6 +26,7 @@ main = do
   test "(Top*T):(TxTop)" (infer [] (Top :*: T)) (Just (U :×: Top))
   test "(Top*T):::(UxVar_0)" (infer [] ((Top :*: T) ::: (U :×: Var 0))) (Just (U :×: Top))
   test "(Top*T):::(UxTop)" (infer [] ((Top :*: T) ::: (U :×: Top))) (Just (U :×: Top))
+
 
   -- Evaluation tests
   test "eval U = U" (eval U) U
@@ -58,3 +51,37 @@ main = do
   test "eval (fn.u e) = eval u[e/0]" (eval (Λ (Var 0 :*: Var 0) :@: T)) (T :*: T)
   test "evaluation continues after application" (eval (Λ (Exl (Var 0 :*: Var 0)) :@: T)) T
   test "eval (Var_0) = Var_0" (eval (Var 0)) (Var 0)
+
+  -- Type-checking tests
+  test "U:U" (infer [] U) (Just U)
+  test "Bot:U" (infer [] Bot) (Just U)
+  test "Top:U" (infer [] Top) (Just U)
+  test "T:Top" (infer [] T) (Just Top)
+  test "(a+b):U when a and b are types" (infer [] (Top :+: Bot)) (Just U)
+  test "(a+b) has no type when a does not evaluate to a type" (infer [] (Exl (T :*: Top) :+: Bot)) Nothing
+  test "(a+b) has no type when b does not evaluate to a type" (infer [] (Bot :+: Exr (Top :*: T))) Nothing
+  test "(inl a):(A + B) has type A when a has type A" (infer [] (Inl T ::: (Top :+: Bot))) (Just (Top :+: Bot))
+  test "(inr b):(A + B) has type B when b has type B" (infer [] (Inr T ::: (Bot :+: Top))) (Just (Bot :+: Top))
+  test "inl a:A has no type if evaluating A is not a coproduct" (infer [] (Inl T ::: Exl (Top :*: Bot))) Nothing
+  test "inl a has no valid type" (infer [] (Inl T)) Nothing
+  test "inr a has no valid type" (infer [] (Inr T)) Nothing
+
+  let f = Λ T ::: (Top :→: Top)
+  let g = Λ T ::: (Top :→: Top)
+  let h = Λ (Var 0 :*: Var 0) ::: (Top :→: (Top :×: Top))
+  let j = Λ (Var 0) ::: (U :→: U)
+  let x = Inl T ::: (Top :+: Top)
+  let fbad = Λ T ::: (U :→: Top)
+  let gbad = Λ T ::: (U :→: Top)
+  let xbad = T
+  test "case f g x has type c when f:a->c and g:b-> and x:a+b" (infer [] (Case f g x)) (Just Top)
+  test "case f g x has no type when x is not a coproduct" (infer [] (Case f g xbad)) Nothing
+  test "case f g x has no type when f is not of type a->c" (infer [] (Case fbad g xbad)) Nothing
+  test "case f g x has no type when g is not of type b->c" (infer [] (Case f gbad xbad)) Nothing
+
+  test "(a x b):U when a and b are types" (infer [] (Top :×: Top)) (Just U)
+  test "(a x b):U when a and b(a) are types" (infer [] (U :×: Var 0)) (Just U)
+  test "(a x b):U when a and eval b(a) are types" (infer [] (U :×: (j :@: Top))) (Just U)
+  test "(a x b) has no type when b(a) is not a type" (infer [] (Top :×: Var 0)) Nothing
+
+  test "(fn.u e):(u[0/e])" (infer [] (h :@: T)) (Just (Top :×: Top))

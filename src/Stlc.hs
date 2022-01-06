@@ -5,14 +5,14 @@ module Stlc where
 
 import Control.Monad
 import Control.Monad.Fail
-import Data.Bool
-import Data.Int (Int)
 import Data.Maybe
 import Data.Either
 import Data.String
 import Data.List hiding (any, lookup)
 import Data.Eq (Eq, (==), (/=))
 import Data.Ord ((<),(>),(>=),(<=))
+import Data.Bool
+import Data.Int (Int)
 import GHC.Num ((-),(+))
 
 
