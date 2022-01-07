@@ -53,15 +53,9 @@ main = do
   let h = Λ (Var 0 :*: Var 0) ::: (Top :→: (Top :×: Top))
   let j = Λ (Var 0) ::: (U :→: U)
   let fg = Λ (Λ (Var 0 :*: Var 1)) ::: (Top :→: Top :→: (Top :×: Top))
-  -- TODO: I just don't think this is the correct signature!!
-  -- λλ0:U → 0 → 0 I think this says "U → the type U provided to a term of the type U provided"
-  -- I think it SHOULD be the following:
-  -- λλ0:U → 0 → 1 which says "U → the type U provided to the type U provided"
   -- id : Π(τ:U) Π(t:τ) → τ
   -- id τ x = x
-  -- (λτ.λx.x):((τ:U) → τ → τ)
-  -- this is the polymorphic identity function.
-  -- given a type τ this function will accept a term of τ and return that term
+  -- (λλ0):(U → 0 → 1)
   let depid = Λ (Λ (Var 0)) ::: (U :→: Var 0 :→: Var 0)
   let x = Inl T ::: (Top :+: Top)
   let fbad = Λ T ::: (U :→: Top)
@@ -82,8 +76,36 @@ main = do
   test "exr (a * b):type b" (infer [] (Exr (Top :*: T))) (Just Top)
 
   test "(a -> b):U when a and b are types" (infer [] (Top :→: Bot)) (Just U)
-  test "(fn.fn.u):(a -> b -> c) as convenient sugar" (infer [] fg) (Just (Top :→: (Top :→: (Top :×: Top))))
+  test "(fn.fn.u):(a -> b -> c) as convenient sugar" (infer [] fg) (Just (Top :→: Top :→: (Top :×: Top)))
   test "(fn.u):(a -> b) has type a -> b when u has type b in a context where 0 -> a" (infer [] h) (Just (Top :→: (Top :×: Top)))
   test "simple dependent function" (infer [] j) (Just (U :→: U))
   test "dependent identity function" (infer [] depid) (Just (U :→: Var 0 :→: Var 0))
   test "(fn.u e):(u[0/e])" (infer [] (h :@: T)) (Just (Top :×: Top))
+
+  let fn = Λ (Λ (Var 1))
+  let gn = Λ (Λ (Var 0))
+  let tau = U :→: Var 0 :→: Var 1
+
+  -- The paper on LambdaPi introduces this as follows:
+  --    id : ∀a.a → a
+  --    id = λ(τ:U).λ(t:τ).t
+
+  -- in a language with implicit arguments you might see this:
+  --    id : {a:U} → (x:a) → a = x
+
+  -- imagine using a c-like language: 
+  --    id(τ:U,t:τ) → τ = t
+
+  -- in a terse, debruijn syntax, we might expect this:
+  --    id : U → 0 → 1 = 0
+
+  -- Currently, we have this:
+  --    λλ0:(U → 0 → 1)
+
+  -- λλ1 T => λT
+  print $ eval $ fn :@: T
+  -- λλ0 T => λ0
+  print $ eval $ gn :@: T
+  print depid
+  print $ eval depid
+  print $ infer [] depid

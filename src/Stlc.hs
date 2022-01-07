@@ -40,8 +40,6 @@ data Term where
   (:::)  :: Term -> Term -> Term
   deriving (Eq)
 
--- TODO: define other fixities to be similar in precedent to Haskell itself
--- functions bind to the right allowing us to write a :→: b :→: c to mean a → (b → c)
 infixl 9 :@:
 infixr 7 :→:
 
@@ -57,7 +55,7 @@ sub n e Top =
 sub n e T =
   T
 sub n e (τ :×: σ) =
-  sub n e τ :×: sub (n+1) e τ
+  sub n e τ :×: sub (n+1) e σ
 sub n e (l :*: r) =
   sub n e l :*: sub n e r
 sub n e (Exl u) =
@@ -160,13 +158,11 @@ eval (Λ e) =
   Λ e
 eval (f :@: e) = case eval f of 
   Λ u     -> eval (sub 0 e u)
-  u ::: τ -> eval (u :@: e)
   _       -> f :@: e
 eval (Var n) = 
   Var n
-eval (e ::: τ) = case (eval e,eval τ) of
-  (a :*: b, σ :×: ρ) -> (a :*: b) ::: (σ :×: sub 0 a ρ)
-  (e',τ')            -> e' ::: τ'
+eval (e ::: τ) = 
+  eval e
 
 infer :: Context -> Term -> Maybe Term
 infer γ U = do
@@ -181,20 +177,10 @@ infer γ (τ :+: σ) = do
   U <- infer γ τ
   U <- infer γ σ
   return U
-infer γ (Inl a ::: τ) = do
-  ρ :+: σ <- return (eval τ)
-  ρ'      <- infer γ a
-  True    <- return (ρ == ρ')
-  return (ρ :+: σ)
-infer γ (Inr b ::: τ) = do
-  ρ :+: σ <- return (eval τ)
-  σ'      <- infer γ b
-  True    <- return (σ == σ')
-  return (ρ :+: σ)
 infer γ (Case f g x) = do
+  α :+: β  <- infer γ x
   α :→: τ  <- infer γ f
   β :→: τ' <- infer γ g
-  α :+: β  <- infer γ x
   True     <- return (τ == τ')
   return τ
 infer γ (τ :×: σ) = do
@@ -215,32 +201,39 @@ infer γ (τ :→: σ) = do
   U <- infer γ τ
   U <- infer (τ:γ) σ
   return U
--- Allows (λx.λy.<x,y>):(T → (T → (T × T)))
-infer γ (Λ e@(Λ u) ::: τ@(σ :→: ρ)) = do
-  ρ'   <- infer (σ:γ) (e ::: ρ)
-  True <- return (ρ == ρ')
-  return τ
-infer γ (Λ e ::: τ) = do
-  ρ :→: σ <- return τ
-  σ'      <- infer (ρ:γ) e
-  True    <- return (σ == σ')
-  return (ρ :→: σ)
 infer γ (f :@: e) = do
   ρ :→: σ <- infer γ f
   ρ'      <- infer γ e
   True    <- return (ρ == ρ')
   return σ
-infer γ ((a :*: b) ::: (τ :×: σ)) = do
-  τ' <- infer γ a
-  ρ  <- infer γ b
-  let ρ' = sub 0 a σ 
-  True <- return (ρ == ρ')
-  return (τ :×: ρ)
-infer γ (t ::: τ) = do
-  τ'   <- infer γ t 
-  True <- return (τ == τ')
-  return τ
 infer γ (Var s) = do
   return (γ !! s)
+infer γ (e ::: τ) = do
+  case eval e of 
+    Inl a -> do
+      ρ :+: σ <- return (eval τ)
+      ρ'      <- infer γ a
+      True    <- return (ρ == ρ')
+      return (ρ :+: σ)
+    Inr b -> do
+      ρ :+: σ <- return (eval τ)
+      σ'      <- infer γ b
+      True    <- return (σ == σ')
+      return (ρ :+: σ)
+    Λ u -> do
+      ρ :→: σ <- return (eval τ)
+      σ'      <- infer (ρ:γ) (u ::: σ)
+      True    <- return (σ == σ')
+      return (ρ :→: σ)
+    a :*: b -> do
+      ρ :×: σ <- return (eval τ)
+      ρ'      <- infer γ ρ
+      σ'      <- infer γ σ
+      True    <- return (σ' == sub 0 a σ)
+      return (ρ :×: σ)
+    e' -> do
+      τ'   <- infer γ e'
+      True <- return (τ == τ')
+      return τ
 infer _ _ = 
   fail "Failed to infer type"
