@@ -77,11 +77,8 @@ sub n e (τ :→: σ) =
 sub n e (f :@: u) =
   sub n e f :@: sub n e u
 sub n e (Var n') 
-  -- Sub in e while incrementing its bound variables
   | n == n'   = inc n 0 e
-  -- This is a "free variable"
   | n' > n    = Var (n'-1)
-  -- A bound variable so leave it alone
   | otherwise = Var n'
 
 inc :: Int -> Int -> Term -> Term
@@ -118,9 +115,7 @@ inc h n (τ :→: σ) =
 inc h n (f :@: u) =
   inc h n f :@: inc h n u
 inc h n (Var n') 
-  -- free variable must be incremented to stay free
   | n' >= n   = Var (n'+h)
-  -- A bound variable so leave it alone
   | otherwise = Var n'
 
 eval :: Term -> Term
@@ -207,6 +202,7 @@ infer γ (f :@: e) = do
   True    <- return (ρ == ρ')
   return σ
 infer γ (Var s) = do
+  -- unsafe. could be a Maybe type
   return (γ !! s)
 infer γ (e ::: τ) = do
   case eval e of 
