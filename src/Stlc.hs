@@ -205,31 +205,59 @@ infer γ (Var s) = do
   -- unsafe. could be a Maybe type
   return (γ !! s)
 infer γ (e ::: τ) = do
-  case eval e of 
+  let e' = eval e
+  let τ' = eval τ
+  U <- infer γ τ'
+  case e' of 
     Inl a -> do
-      ρ :+: σ <- return (eval τ)
+      ρ :+: σ <- return τ'
       ρ'      <- infer γ a
       True    <- return (ρ == ρ')
       return (ρ :+: σ)
     Inr b -> do
-      ρ :+: σ <- return (eval τ)
+      ρ :+: σ <- return τ'
       σ'      <- infer γ b
       True    <- return (σ == σ')
       return (ρ :+: σ)
-    Λ u -> do
-      ρ :→: σ <- return (eval τ)
-      σ'      <- infer (ρ:γ) (u ::: σ)
-      True    <- return (σ == σ')
-      return (ρ :→: σ)
+    {-
+    Important note of explanation:
+
+    DeBruijn indices store variables by number
+    of binders between the variable instance and
+    the variable.
+
+    [] |- λλ0:(U → 0 → 1)
+
+    Here we prepend U to the context because it is
+    a concrete type.
+
+    [U] |- λ0:(0 → 1)
+
+    Here we prepend 0+1 to the context because 0 is
+    a bound variable referencing a variable that should
+    be free once we go under the remaining binder.
+
+    [(0+1),U] |- 0:1
+
+    Here we see that variable 0 indeed has type variable 1
+    as expected.
+    -}
+    Λ b -> do
+      α :→: β <- return τ'
+      β'      <- case α of
+        Var n -> do infer (Var (n+1):γ) (b ::: β)
+        _     -> do infer (α:γ) (b ::: β)
+      return (α :→: β')
     a :*: b -> do
-      ρ :×: σ <- return (eval τ)
-      ρ'      <- infer γ ρ
-      σ'      <- infer γ σ
-      True    <- return (σ' == sub 0 a σ)
-      return (ρ :×: σ)
-    e' -> do
-      τ'   <- infer γ e'
-      True <- return (τ == τ')
-      return τ
+      α :×: β <- return τ'
+      α'      <- infer γ a
+      β'      <- infer (α:γ) b
+      True    <- return (α == α')
+      True    <- return (sub 0 a β == β')
+      return (α' :×: β')
+    _ -> do
+      τ''  <- infer γ e'
+      True <- return (τ' == τ'')
+      return τ''
 infer _ _ = 
   fail "Failed to infer type"

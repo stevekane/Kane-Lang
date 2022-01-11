@@ -53,10 +53,7 @@ main = do
   let h = Λ (Var 0 :*: Var 0) ::: (Top :→: (Top :×: Top))
   let j = Λ (Var 0) ::: (U :→: U)
   let fg = Λ (Λ (Var 0 :*: Var 1)) ::: (Top :→: Top :→: (Top :×: Top))
-  -- id : Π(τ:U) Π(t:τ) → τ
-  -- id τ x = x
-  -- (λλ0):(U → 0 → 1)
-  let depid = Λ (Λ (Var 0)) ::: (U :→: Var 0 :→: Var 0)
+  let depid = Λ (Λ (Var 0)) ::: (U :→: Var 0 :→: Var 1)
   let x = Inl T ::: (Top :+: Top)
   let fbad = Λ T ::: (U :→: Top)
   let gbad = Λ T ::: (U :→: Top)
@@ -79,33 +76,137 @@ main = do
   test "(fn.fn.u):(a -> b -> c) as convenient sugar" (infer [] fg) (Just (Top :→: Top :→: (Top :×: Top)))
   test "(fn.u):(a -> b) has type a -> b when u has type b in a context where 0 -> a" (infer [] h) (Just (Top :→: (Top :×: Top)))
   test "simple dependent function" (infer [] j) (Just (U :→: U))
-  test "dependent identity function" (infer [] depid) (Just (U :→: Var 0 :→: Var 0))
+  test "dependent identity function" (infer [] depid) (Just (U :→: Var 0 :→: Var 1))
   test "(fn.u e):(u[0/e])" (infer [] (h :@: T)) (Just (Top :×: Top))
 
-  let fn = Λ (Λ (Var 1))
-  let gn = Λ (Λ (Var 0))
-  let tau = U :→: Var 0 :→: Var 1
+  let bdy = Λ (Λ (Var 0))
+  let tpe = U :→: (Var 0 :→: Var 1)
+  let identity = bdy ::: tpe
 
-  -- The paper on LambdaPi introduces this as follows:
-  --    id : ∀a.a → a
-  --    id = λ(τ:U).λ(t:τ).t
+  print (infer [] identity)
 
-  -- in a language with implicit arguments you might see this:
-  --    id : {a:U} → (x:a) → a = x
+  {-
+  I think I have found the problem. 
 
-  -- imagine using a c-like language: 
-  --    id(τ:U,t:τ) → τ = t
+  When you add the named variable 0 => U into the context you would like it
+  to stay bound in this way.
 
-  -- in a terse, debruijn syntax, we might expect this:
-  --    id : U → 0 → 1 = 0
+  When you add the named variable 1 => 0 you would like it to stay this way.
 
-  -- Currently, we have this:
-  --    λλ0:(U → 0 → 1)
+  Γ,1,U |-   0:1
+  "prepend 0+1 to the context because variable 0 after removing the binder is now variable 1"
+  Γ,U   |-  λ0:0 → 1
+  "prepend U to the context"
+  Γ     |- λλ0:U → 0 → 1
 
-  -- λλ1 T => λT
-  print $ eval $ fn :@: T
-  -- λλ0 T => λ0
-  print $ eval $ gn :@: T
-  print depid
-  print $ eval depid
-  print $ infer [] depid
+  -}
+  {-
+  Adding Π and Σ types introduces variables in type expressions. 
+
+  Π(x:τ) denotes a bound variable x of type τ which may appear
+  anywhere in the body of the Π.
+
+  Σ(x:τ) is the same thing but captures dependent pairs as opposed
+  to functions.
+
+  If we use DeBruijn indices instead of named variables, we can capture
+  the same idea using this slightly ammended notation:
+
+  Π(x:α) β becomes α → β where β may contain the variable "0" which
+  is the "name" for what used to be the bound variable "x".
+
+  Σ(x:α) β becomes α × β where β may contain the variables "0" for the
+  reasons specified above.
+
+  This means that when we are checking the type of a variable, it is 
+  now possible for a type to be itself a bound variable and not always
+  some concrete value.
+
+  For example, let's look at the classic existential quantifier as
+  modeled in dependent type theory by the product:
+
+    (a * b) : (U × 0)
+
+  This sentence declares that a * b is a witness of the type U × 0.
+  In english, this says that the type of a is U (a is a therefore
+  a type) and that the type of b is the type bound to variable 0.
+
+  Γ   |- a:U
+  Γ,U |- b:0
+  --------------------
+  Γ |- (a * b):(U × 0)
+
+  Γ   |- a:α
+  Γ,α |- b:β
+  --------------------
+  Γ   |- (a * b):(α × β)
+
+
+
+
+  The typing rules as stated in The Little Typer for pairs are as follows:
+
+  Γ |- a:α ~> a'
+  Γ |- b:β[a'/0] ~> b'
+  -----------------------------------
+  Γ |- (a * b) : (α × β) ~> (a' * b')
+
+  These rules are read aloud as:
+
+  "To check that a*b has the type α×β yielding value a'*b' you require
+  a have the type α yielding value a' and b have the type β with capture-avoiding
+  substitution of 0 for a' yielding value b'"
+
+  In the meta-language:
+    Checking is function of type : Term * Term → Term
+    Inferring is a function of type : Term → Term * Term
+
+  I don't really care for their syntax however so let's rewrite it:
+
+  (_ |- _ : _) : 
+    (Γ : Context) → 
+    (a * b) : (Term × Term) →
+    (α × β) : (Term × Term) → 
+    (c : Term) * (Γ |- a : α = c) → 
+    (d : Term) * (Γ |- b : β[a'/0] = d) →
+    (Term × Term) = 
+      (c * d)
+
+  This is itself syntax of a dependently-typed programming language (Agda)!
+  We could use this, along with all other valid definitions of typing judgements
+  to define a datatype of typechecked expressions.
+
+
+  What about functions? How does TLT handle them?
+
+  Γ,x:Arg |- r ∈ R ~> r'
+  --------------------------------------------
+  Γ |- (λ (x) r) ∈ (Π (x Arg) R) ~> (λ (x) r')
+
+  Let's convert this to an indexed style matching our langauge:
+
+  Γ+α |- e : β ~> u
+  --------------------------------------------
+  Γ |- λe : (α → β) ~> λu
+
+  Aloud, this is read as follows:
+
+  "To check that in context Γ λe has type α → β yielding λu you must check that
+  in context Γ+α e has type β yielding u"
+
+  There is a second rule listed in TLT for n-ary functions. Let's look at that.
+
+  Γ+α |- λλe : β ~> u
+  -------------------------
+  Γ |- λλλe : (α → β) ~> λu
+
+  In english:
+
+  "This is the same as the rule above applied recursively to itself."
+
+  Going back to our horrible no-good problem:
+
+  Γ+0+U |- 0:1 ~> 0
+  Γ+U   |- λ0:0 → 1 ~> λ0
+  Γ     |- λλ0:U → 0 → 1 ~> λλ0
+  -}
